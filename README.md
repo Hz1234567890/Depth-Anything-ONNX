@@ -1,3 +1,8 @@
+# mine
+      python dynamo.py infer weights/vitb.onnx -f /media/hz/新加卷/0mywork/mine/UseGeo_1 -o /media/hz/新加卷/0mywork/Depth-Anything-ONNX/depth
+
+
+
 [![ONNX](https://img.shields.io/badge/ONNX-grey)](https://onnx.ai/)
 [![GitHub Repo stars](https://img.shields.io/github/stars/fabio-sim/Depth-Anything-ONNX)](https://github.com/fabio-sim/Depth-Anything-ONNX/stargazers)
 [![GitHub all releases](https://img.shields.io/github/downloads/fabio-sim/Depth-Anything-ONNX/total)](https://github.com/fabio-sim/Depth-Anything-ONNX/releases)

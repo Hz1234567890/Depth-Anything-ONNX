@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Annotated, Optional
 import os
 import re
+import numpy as np
 import cv2
 import onnxruntime as ort
 import torch
@@ -11,6 +12,19 @@ import typer
 from depth_anything_v2.config import Encoder, Metric
 from depth_anything_v2.dpt import DepthAnythingV2
 
+def find_nxn_region_from_center(depth_matrix, threshold, n):
+    h, w = depth_matrix.shape
+    center_i, center_j = h // 2, w // 2
+
+    # 以中心为起点，逐步向外扩展搜索
+    for radius in range(min(h, w) // 2):
+        for i in range(max(0, center_i - radius), min(h - (n-1), center_i + radius + 1)):
+            for j in range(max(0, center_j - radius), min(w - (n-1), center_j + radius + 1)):
+                region = depth_matrix[i:i+n, j:j+n]
+                region_range = region.max() - region.min()
+                if region_range <= threshold:
+                    return (i, j), region
+    return None, None
 
 class ExportFormat(StrEnum):
     onnx = auto()
@@ -212,6 +226,9 @@ def infer(
     files = os.listdir(folder_path)
     jpg_files = [file for file in files if file.endswith('.jpg')]
 
+    n=50 #差异性区域
+    threshold = 0.2  # 设置差异性阈值
+
     # 按顺序重命名文件
     for index, file in enumerate(jpg_files):
         print(index,file)
@@ -219,6 +236,7 @@ def infer(
 
         image = cv2.imread(str(image_path))
         h, w = image.shape[:2]
+        original_image = image.copy()  # 保留原始图像用于标注
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB) / 255.0
         image = cv2.resize(image, (width, height), interpolation=cv2.INTER_CUBIC)
         image = (image - [0.485, 0.456, 0.406]) / [0.229, 0.224, 0.225]
@@ -246,19 +264,49 @@ def infer(
 
         depth = binding.get_outputs()[0].numpy()
 
-        # Postprocessing, implement this part in your chosen language:
-        depth = (depth - depth.min()) / (depth.max() - depth.min()) * 255.0
-        depth = depth.transpose(1, 2, 0).astype("uint8")
-        depth = cv2.resize(depth, (w, h), interpolation=cv2.INTER_CUBIC)
+        # 后处理
+        depth = depth.squeeze()  # 移除多余的批量维度
+        print("depth:")
+        print(depth)
+        depth_normalized = (depth - depth.min()) / (depth.max() - depth.min()) * 255.0
+        depth_normalized = depth_normalized.astype("uint8")
+        depth_resized = cv2.resize(depth_normalized, (w, h), interpolation=cv2.INTER_CUBIC)
 
+        # 查找满足条件的5x5区域
+        region_position, region = find_nxn_region_from_center(depth, threshold, n)
+        if region is not None:
+            print(f"Found {n}x{n} region at position {region_position} with depth range within {threshold}")
+            print("Region:")
+            print(region)
+
+            # 标注原始RGB图像
+            i, j = region_position
+            top_left = (j, i)
+            bottom_right = (j + n, i + n)
+            cv2.rectangle(original_image, top_left, bottom_right, (0, 255, 0), 2)
+
+            
+        else:
+            print(f"No {n}x{n} region found in {file} with depth range within {threshold}")
+
+        # 保存标注后的RGB图像
+        annotated_image_filename = f"annotated_{file}"
+        annotated_image_path = os.path.join(output_folder_path, annotated_image_filename)
+        cv2.imwrite(annotated_image_path, original_image)
+
+        # 保存或显示深度图
         if output_folder_path is None:
-            cv2.imshow("depth", depth)
+            cv2.imshow("depth", depth_resized)
             cv2.waitKey(0)
         else:
             numbers = re.findall(r'\d+', file)
-            new_filename = f"depth_{numbers[0]}.png"
-            output_path=os.path.join(output_folder_path, new_filename)
-            cv2.imwrite(str(output_path), depth)
+            new_image_filename = f"depth_{numbers[0]}.png"
+            image_output_path = os.path.join(output_folder_path, new_image_filename)
+            cv2.imwrite(str(image_output_path), depth_resized)
+
+            new_matrix_filename = f"depth_matrix_{numbers[0]}.npy"
+            matrix_output_path = os.path.join(output_folder_path, new_matrix_filename)
+            np.save(matrix_output_path, depth)  # 保存深度矩阵
 
 
 if __name__ == "__main__":
