@@ -5,6 +5,7 @@ import os
 import re
 import numpy as np
 import cv2
+from MySobel import compute_normal_vectors,visualize_normals 
 import onnxruntime as ort
 import torch
 import typer
@@ -272,42 +273,49 @@ def infer(
         depth_normalized = depth_normalized.astype("uint8")
         depth_resized = cv2.resize(depth_normalized, (w, h), interpolation=cv2.INTER_CUBIC)
 
-        # 查找满足条件的5x5区域
-        region_position, region = find_nxn_region_from_center(depth, threshold, n)
-        if region is not None:
-            print(f"Found {n}x{n} region at position {region_position} with depth range within {threshold}")
-            print("Region:")
-            print(region)
+        # # 查找满足条件的5x5区域
+        # region_position, region = find_nxn_region_from_center(depth, threshold, n)
+        # if region is not None:
+        #     print(f"Found {n}x{n} region at position {region_position} with depth range within {threshold}")
+        #     print("Region:")
+        #     print(region)
 
-            # 标注原始RGB图像
-            i, j = region_position
-            top_left = (j, i)
-            bottom_right = (j + n, i + n)
-            cv2.rectangle(original_image, top_left, bottom_right, (0, 255, 0), 2)
+        #     # 标注原始RGB图像
+        #     i, j = region_position
+        #     top_left = (j, i)
+        #     bottom_right = (j + n, i + n)
+        #     cv2.rectangle(original_image, top_left, bottom_right, (0, 255, 0), 2)
 
             
-        else:
-            print(f"No {n}x{n} region found in {file} with depth range within {threshold}")
+        # else:
+        #     print(f"No {n}x{n} region found in {file} with depth range within {threshold}")
 
-        # 保存标注后的RGB图像
-        annotated_image_filename = f"annotated_{file}"
-        annotated_image_path = os.path.join(output_folder_path, annotated_image_filename)
-        cv2.imwrite(annotated_image_path, original_image)
+        # # 保存标注后的RGB图像
+        # annotated_image_filename = f"annotated_{file}"
+        # annotated_image_path = os.path.join(output_folder_path, annotated_image_filename)
+        # cv2.imwrite(annotated_image_path, original_image)
 
-        # 保存或显示深度图
-        if output_folder_path is None:
-            cv2.imshow("depth", depth_resized)
-            cv2.waitKey(0)
-        else:
-            numbers = re.findall(r'\d+', file)
-            new_image_filename = f"depth_{numbers[0]}.png"
-            image_output_path = os.path.join(output_folder_path, new_image_filename)
-            cv2.imwrite(str(image_output_path), depth_resized)
+        # # 保存或显示深度图
+        # if output_folder_path is None:
+        #     cv2.imshow("depth", depth_resized)
+        #     cv2.waitKey(0)
+        # else:
+        #     numbers = re.findall(r'\d+', file)
+        #     new_image_filename = f"depth_{numbers[0]}.png"
+        #     image_output_path = os.path.join(output_folder_path, new_image_filename)
+        #     cv2.imwrite(str(image_output_path), depth_resized)
 
-            new_matrix_filename = f"depth_matrix_{numbers[0]}.npy"
-            matrix_output_path = os.path.join(output_folder_path, new_matrix_filename)
-            np.save(matrix_output_path, depth)  # 保存深度矩阵
+        #     new_matrix_filename = f"depth_matrix_{numbers[0]}.npy"
+        #     matrix_output_path = os.path.join(output_folder_path, new_matrix_filename)
+        #     np.save(matrix_output_path, depth)  # 保存深度矩阵
+        # 假设depth_matrix是我们给定的深度矩阵
 
+        #获取normal_vectors的文件名
+        normals_filename = f"annotated_{file}"
+        normals_path = os.path.join(output_folder_path, normals_filename)
+
+        normal_x, normal_y, normal_z = compute_normal_vectors(depth)
+        visualize_normals(normal_x, normal_y, normal_z,normals_path)
 
 if __name__ == "__main__":
     app()
